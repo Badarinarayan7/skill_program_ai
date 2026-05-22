@@ -3,8 +3,13 @@ import json
 from google import genai
 from google.genai import types
 import pytesseract
-# Update this path to match exactly where you installed Tesseract in step 1
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+# This forces Python to look in the exact right spot
+tesseract_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+if os.path.exists(tesseract_path):
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+else:
+    print(f"CRITICAL: Tesseract not found at {tesseract_path}. Check installation.")
 
 def run_multi_agent_analysis(extracted_text):
     """
