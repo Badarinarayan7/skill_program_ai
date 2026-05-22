@@ -2,6 +2,9 @@ import os
 import json
 from google import genai
 from google.genai import types
+import pytesseract
+# Update this path to match exactly where you installed Tesseract in step 1
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 def run_multi_agent_analysis(extracted_text):
     """
