@@ -8,3 +8,11 @@ sentence-transformers==3.0.0
 numpy==1.26.4
 pypdf==4.2.0
 google-genai
+
+# 🛠️ CRUCIAL ADDITIONS (Missing from your list):
+python-docx             # Needed for the 'import docx' statement to read Word syllabi
+beautifulsoup4          # Needed for scraping raw text data from course web URLs
+pillow                  # Needed for Python to open and manage target image files
+pytesseract             # Needed for the OCR engine to read text inside brochure images
+streamlit-mic-recorder  # Needed for your Tab 4 Voice-Based AI counseling mic button
+fpdf2                   # Needed for compiling and exporting the automated PDF reports
