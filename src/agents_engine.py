@@ -1,84 +1,61 @@
 import os
 import json
+import time
 from google import genai
 from google.genai import types
 import pytesseract
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-# This forces Python to look in the exact right spot
+# Tesseract Path Configuration
 tesseract_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 if os.path.exists(tesseract_path):
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
 else:
     print(f"CRITICAL: Tesseract not found at {tesseract_path}. Check installation.")
 
+# Define retry strategy for 503/500 errors
+@retry(
+    stop=stop_after_attempt(3), 
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(Exception)
+)
+def call_gemini_api(client, extracted_text, system_instruction):
+    """Wrapper to call Gemini with automatic retry logic."""
+    return client.models.generate_content(
+        model='gemini-2.0-flash', # Note: 'gemini-2.5' is not yet standard; '2.0-flash' is the stable high-perf model
+        contents=f"Analyze this document context and extract agent analytics:\n\n{extracted_text}",
+        config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            response_mime_type="application/json"
+        ),
+    )
+
 def run_multi_agent_analysis(extracted_text):
     """
-    Executes a structured 9-Agent parallel orchestration matrix over raw document text,
-    returning a strict JSON structure mapped to the hackathon grading metrics.
+    Executes a structured 9-Agent parallel orchestration matrix with retry logic.
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        return {
-            "Curriculum_Score": 80, "Faculty_Score": 75, "ROI_Score": 70, 
-            "Industry_Alignment": 85, "Placement_Score": 75, "Sentiment_Score": 80,
-            "Fees": 75000, "Projects": 12, "GenAI_Coverage": "High", "Placement_Support": "Excellent",
-            "SWOT": {"Strengths": "API Key missing", "Weaknesses": "N/A", "Opportunities": "N/A", "Risks": "N/A"},
-            "Missing_Skills": ["Setup API Key"], "Job_Roles": ["Developer"]
-        }
+        return {"error": "GEMINI_API_KEY environment variable not set."}
 
     client = genai.Client(api_key=api_key)
 
     system_instruction = """
-    You are an orchestration node managing a cluster of 9 specialized Agent micro-services evaluating an academic program:
-    1. Curriculum Analysis Agent (Page 3)
-    2. Faculty Intelligence Agent (Page 3)
-    3. Company & Brand Agent (Page 4)
-    4. Pricing & ROI Agent (Page 5)
-    5. Teaching Methodology Agent (Page 5)
-    6. Student Feedback Agent (Page 6)
-    7. Placement & Career Agent (Page 7)
-    8. Recommendation Agent (Page 7)
-    9. Competitive Intelligence Agent (Page 8)
-
-    Analyze the provided input text and generate a valid JSON dictionary output with these EXACT keys:
-    {
-      "Curriculum_Score": integer (1-100),
-      "Faculty_Score": integer (1-100),
-      "ROI_Score": integer (1-100),
-      "Industry_Alignment": integer (1-100),
-      "Placement_Score": integer (1-100),
-      "Sentiment_Score": integer (1-100),
-      "Fees": integer (extracted course cost in INR or rough estimate, e.g. 60000),
-      "Projects": integer (number of practical projects built),
-      "GenAI_Coverage": "string (Low, Medium, or High)",
-      "Placement_Support": "string (Moderate or Excellent)",
-      "Missing_Skills": list of strings,
-      "Job_Roles": list of strings,
-      "SWOT": {
-         "Strengths": "string text summary",
-         "Weaknesses": "string text summary",
-         "Opportunities": "string text summary",
-         "Risks": "string text summary"
-      }
-    }
-    Return raw JSON only. Do not wrap in markdown blocks.
+    You are an orchestration node managing a cluster of 9 specialized Agent micro-services evaluating an academic program. 
+    Analyze the provided input and return a valid JSON object with the following keys:
+    Curriculum_Score, Faculty_Score, ROI_Score, Industry_Alignment, Placement_Score, 
+    Sentiment_Score, Fees, Projects, GenAI_Coverage, Placement_Support, Missing_Skills, Job_Roles, SWOT.
+    SWOT must contain: Strengths, Weaknesses, Opportunities, Risks.
+    Return raw JSON only.
     """
 
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=f"Analyze this document context and extract agent analytics:\n\n{extracted_text}",
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json"
-            ),
-        )
+        response = call_gemini_api(client, extracted_text, system_instruction)
         return json.loads(response.text)
     except Exception as e:
+        print(f"Final attempt failed: {e}")
         return {
-            "Curriculum_Score": 85, "Faculty_Score": 80, "ROI_Score": 75, 
-            "Industry_Alignment": 90, "Placement_Score": 80, "Sentiment_Score": 85,
-            "Fees": 85000, "Projects": 15, "GenAI_Coverage": "High", "Placement_Support": "Excellent",
-            "SWOT": {"Strengths": "Fallback baseline active", "Weaknesses": "None", "Opportunities": "Growth", "Risks": "Competition"},
-            "Missing_Skills": ["Advanced Deployment Scaling"], "Job_Roles": ["AI Solutions Engineer"]
+            "Curriculum_Score": 0, "Faculty_Score": 0, "ROI_Score": 0, 
+            "SWOT": {"Strengths": "Service Unavailable", "Weaknesses": "API Timeout", "Opportunities": "None", "Risks": "High Traffic"},
+            "Missing_Skills": ["Retry request"], "Job_Roles": ["N/A"]
         }
