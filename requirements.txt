@@ -14,3 +14,4 @@ pillow
 pytesseract
 streamlit-mic-recorder
 fpdf2
+tenacity==8.3.0
